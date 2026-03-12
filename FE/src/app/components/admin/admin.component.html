@@ -1,0 +1,205 @@
+<div class="max-w-5xl mx-auto">
+  <!-- Header -->
+  <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-primary">Gerenciar Usuários</h1>
+      <p class="text-gray-500 mt-1 text-sm">Crie e gerencie os acessos dos clientes ao sistema.</p>
+    </div>
+    <button (click)="openNewUserForm()"
+      class="bg-secondary text-white px-6 py-2.5 rounded-full font-bold hover:bg-orange-600 transition-colors shadow-md flex items-center gap-2">
+      <lucide-icon name="plus" class="w-5 h-5"></lucide-icon>
+      Novo Usuário
+    </button>
+  </div>
+
+  <!-- Users Table -->
+  <div class="bg-white rounded-xl shadow-sm">
+    @if (loading()) {
+      <div class="flex items-center justify-center py-16">
+        <svg width="40px" viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg" class="stroke-primary">
+          <g fill="none" fill-rule="evenodd"><g transform="translate(1 1)" stroke-width="2">
+            <circle stroke-opacity=".5" cx="18" cy="18" r="18" />
+            <path d="M36 18c0-9.94-8.06-18-18-18">
+              <animateTransform attributeName="transform" type="rotate" from="0 18 18" to="360 18 18" dur="1s" repeatCount="indefinite" />
+            </path>
+          </g></g>
+        </svg>
+      </div>
+    } @else {
+      <!-- Desktop -->
+      <div class="hidden md:block">
+        <table class="w-full text-sm text-left text-gray-500">
+          <thead class="text-xs text-primary uppercase bg-gray-100 font-bold">
+            <tr class="border-b-2 border-gray-200">
+              <th class="px-6 py-4">Username</th>
+              <th class="px-6 py-4">Nome</th>
+              <th class="px-6 py-4">Empresa</th>
+              <th class="px-6 py-4">Role</th>
+              <th class="px-6 py-4">Integração</th>
+              <th class="px-6 py-4">Status</th>
+              <th class="px-6 py-4 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of users(); track user.id) {
+              <tr class="bg-white border-b hover:bg-gray-50">
+                <td class="px-6 py-4 font-medium text-gray-900">{{ user.username }}</td>
+                <td class="px-6 py-4 font-bold text-primary">{{ user.nome_completo || '-' }}</td>
+                <td class="px-6 py-4">{{ user.empresa || '-' }}</td>
+                <td class="px-6 py-4">
+                  <span class="px-2 py-1 rounded-full text-xs font-bold"
+                    [ngClass]="user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-600'">
+                    {{ user.role === 'admin' ? 'Admin' : 'Usuário' }}
+                  </span>
+                </td>
+                <td class="px-6 py-4">
+                  @if (user.has_vhsys_keys) {
+                    <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                      <lucide-icon name="check-circle-2" class="w-3 h-3"></lucide-icon> Ativa
+                    </span>
+                  } @else {
+                    <span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                      <lucide-icon name="minus-circle" class="w-3 h-3"></lucide-icon> Nenhuma
+                    </span>
+                  }
+                </td>
+                <td class="px-6 py-4">
+                  <span class="px-2 py-1 rounded-full text-xs font-bold"
+                    [ngClass]="user.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                    {{ user.ativo ? 'Ativo' : 'Inativo' }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <button (click)="openEditForm(user)" class="p-2 text-gray-400 hover:text-primary rounded-lg hover:bg-gray-100" title="Editar">
+                      <lucide-icon name="edit-2" class="w-4 h-4"></lucide-icon>
+                    </button>
+                    @if (user.role !== 'admin') {
+                      <button (click)="toggleUserStatus(user)" class="p-2 text-gray-400 hover:text-secondary rounded-lg hover:bg-gray-100"
+                        [title]="user.ativo ? 'Desativar' : 'Ativar'">
+                        <lucide-icon [name]="user.ativo ? 'toggle-right' : 'toggle-left'" class="w-4 h-4"></lucide-icon>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="text-center py-10 text-gray-500">Nenhum usuário cadastrado.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile -->
+      <div class="md:hidden p-4 space-y-3">
+        @for (user of users(); track user.id) {
+          <div class="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="font-bold text-primary">{{ user.nome_completo || user.username }}</p>
+                <p class="text-sm text-gray-500">&#64;{{ user.username }}</p>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="px-2 py-1 rounded-full text-xs font-bold"
+                  [ngClass]="user.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                  {{ user.ativo ? 'Ativo' : 'Inativo' }}
+                </span>
+              </div>
+            </div>
+            <p class="text-sm text-gray-600">{{ user.empresa || 'Sem empresa' }}</p>
+            <div class="flex gap-2 pt-1">
+              <button (click)="openEditForm(user)" class="text-xs text-primary font-medium px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50">Editar</button>
+              @if (user.role !== 'admin') {
+                <button (click)="toggleUserStatus(user)" class="text-xs font-medium px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50"
+                  [class.text-red-600]="user.ativo" [class.text-green-600]="!user.ativo">
+                  {{ user.ativo ? 'Desativar' : 'Ativar' }}
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- User Form Modal -->
+  @if (isFormOpen()) {
+    <div class="fixed inset-0 z-50 overflow-y-auto">
+      <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" (click)="closeForm()"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+        <div class="inline-block align-bottom bg-white rounded-t-xl sm:rounded-lg text-left overflow-hidden shadow-xl transform transition-all w-full sm:my-8 sm:align-middle sm:max-w-lg">
+          <div class="bg-white px-6 py-4 border-b border-gray-100">
+            <h3 class="text-lg font-bold text-primary">{{ editingUser() ? 'Editar Usuário' : 'Novo Usuário' }}</h3>
+          </div>
+
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <input type="text" [(ngModel)]="formUsername" [disabled]="!!editingUser()"
+                class="w-full px-4 py-3 rounded-lg border border-input-border bg-input-bg focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400 disabled:opacity-50"
+                placeholder="Ex: joao.oficina">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                {{ editingUser() ? 'Nova Senha (opcional)' : 'Senha' }}
+              </label>
+              <input type="password" [(ngModel)]="formPassword"
+                class="w-full px-4 py-3 rounded-lg border border-input-border bg-input-bg focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400"
+                placeholder="Insira a senha">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+              <input type="text" [(ngModel)]="formNome"
+                class="w-full px-4 py-3 rounded-lg border border-input-border bg-input-bg focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400"
+                placeholder="Nome completo">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" [(ngModel)]="formEmail"
+                class="w-full px-4 py-3 rounded-lg border border-input-border bg-input-bg focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400"
+                placeholder="email@exemplo.com">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+              <input type="text" [(ngModel)]="formEmpresa"
+                class="w-full px-4 py-3 rounded-lg border border-input-border bg-input-bg focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400"
+                placeholder="Nome da empresa/oficina">
+            </div>
+            
+            <!-- Integração VHSYS (Obrigatória) -->
+            <div class="pt-4 border-t border-gray-100">
+              <h4 class="text-sm font-semibold text-primary mb-3">Integração VHSYS (Obrigatória)</h4>
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Access Token</label>
+                  <input type="text" [(ngModel)]="formVhsysAccess"
+                    class="w-full px-4 py-3 rounded-lg border border-input-border bg-input-bg focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400"
+                    placeholder="Cole o Access Token aqui">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Secret Token</label>
+                  <input type="text" [(ngModel)]="formVhsysSecret"
+                    class="w-full px-4 py-3 rounded-lg border border-input-border bg-input-bg focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400"
+                    placeholder="{{ editingUser() && editingUser()!.has_vhsys_keys ? 'Preencha apenas para alterar a chave existente' : 'Cole o Secret Token aqui' }}">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 px-6 py-3 flex justify-end gap-3">
+            <button (click)="closeForm()"
+              class="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium">
+              Cancelar
+            </button>
+            <button (click)="saveUser()" [disabled]="isFormInvalid()"
+              class="px-6 py-2 rounded-full bg-primary text-white hover:opacity-90 text-sm font-medium disabled:opacity-40 shadow-md">
+              {{ saving() ? 'Salvando...' : (editingUser() ? 'Atualizar Dados' : 'Criar Usuário') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</div>

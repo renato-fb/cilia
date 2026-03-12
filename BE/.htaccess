@@ -1,0 +1,20 @@
+# Habilita CORS
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>
+
+# Protege o arquivo .env
+<Files .env>
+    Order allow,deny
+    Deny from all
+</Files>
+
+# PHP Settings
+php_flag display_errors Off
+php_flag display_startup_errors Off
+php_value error_reporting 0
+
+# Charset UTF-8
+AddDefaultCharset UTF-8

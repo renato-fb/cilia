@@ -1,0 +1,90 @@
+<app-toast />
+<div class="min-h-screen bg-white">
+  <header class="bg-white shadow-sm sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <!-- Logo -->
+        <div class="flex-shrink-0 flex items-center space-x-8">
+          <a routerLink="/dashboard" class="flex items-center space-x-3">
+            <img class="h-8 w-auto" src="https://kllix.com.br/images/kllix.svg" alt="Kllix Logo">
+            <span class="text-lg font-semibold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent tracking-tight">Cilia</span>
+          </a>
+
+          <!-- Navigation Links -->
+          <nav class="hidden md:flex space-x-4">
+            <a routerLink="/dashboard" routerLinkActive="text-secondary font-bold"
+              [routerLinkActiveOptions]="{exact: true}"
+              class="text-gray-600 hover:text-primary transition-colors px-3 py-2 rounded-md text-sm font-medium">
+              <span class="flex items-center gap-1.5">
+                <lucide-icon name="file-up" class="w-4 h-4"></lucide-icon>
+                Importar OS
+              </span>
+            </a>
+            @if (isAdmin) {
+              <a routerLink="/admin" routerLinkActive="text-secondary font-bold"
+                class="text-gray-600 hover:text-primary transition-colors px-3 py-2 rounded-md text-sm font-medium">
+                <span class="flex items-center gap-1.5">
+                  <lucide-icon name="users" class="w-4 h-4"></lucide-icon>
+                  Usuários
+                </span>
+              </a>
+            }
+          </nav>
+        </div>
+
+        <!-- Profile Dropdown -->
+        <div class="relative">
+          <div class="flex items-center space-x-4 cursor-pointer" (click)="toggleProfileMenu()">
+            <span class="hidden sm:inline font-semibold text-primary">{{ userName }}</span>
+            <div
+              class="w-10 h-10 rounded-full bg-gradient-to-br from-secondary to-red-500 flex items-center justify-center text-white font-bold">
+              {{ userInitial }}
+            </div>
+            <lucide-icon name="chevron-down" class="text-gray-500 w-4 h-4"></lucide-icon>
+          </div>
+
+          @if (isProfileMenuOpen()) {
+            <div
+              class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none"
+              role="menu">
+              @if (isAdmin) {
+                <button (click)="goToProfile()"
+                  class="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                  role="menuitem">
+                  <lucide-icon name="user" class="mr-2 h-4 w-4"></lucide-icon>
+                  <span>Minha Conta</span>
+                </button>
+              }
+              <a routerLink="/dashboard" routerLinkActive="text-secondary font-bold"
+                [routerLinkActiveOptions]="{exact: true}"
+                class="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer md:hidden"
+                role="menuitem">
+                <lucide-icon name="file-up" class="mr-2 h-4 w-4"></lucide-icon>
+                <span>Importar OS</span>
+              </a>
+              @if (isAdmin) {
+                <a routerLink="/admin" routerLinkActive="text-secondary font-bold"
+                  class="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                  role="menuitem">
+                  <lucide-icon name="users" class="mr-2 h-4 w-4"></lucide-icon>
+                  <span>Gerenciar Usuários</span>
+                </a>
+              }
+              <div class="border-t border-gray-100 my-1"></div>
+              <button (click)="logout()"
+                class="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                role="menuitem">
+                <lucide-icon name="log-out" class="mr-2 h-4 w-4"></lucide-icon>
+                <span>Sair</span>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
+    <router-outlet></router-outlet>
+  </main>
+</div>
