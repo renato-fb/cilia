@@ -77,6 +77,107 @@ function makeRequest($url, $headers, $method = 'GET', $data = null) {
 }
 
 // ============================================
+// Helper: Buscar produto existente no VHSYS por descrição
+// ============================================
+function buscarProdutoPorDescricao($baseUrl, $headers, $descricao) {
+    $url = $baseUrl . '/produtos?desc_produto=' . urlencode($descricao);
+    $response = makeRequest($url, $headers, 'GET');
+    $data = json_decode($response, true);
+
+    if (isset($data['code']) && $data['code'] == 200 && !empty($data['data'])) {
+        // A API retorna uma lista, procurar match exato (case-insensitive)
+        foreach ($data['data'] as $produto) {
+            if (isset($produto['desc_produto']) && mb_strtolower(trim($produto['desc_produto'])) === mb_strtolower(trim($descricao))) {
+                return $produto['id_produto'];
+            }
+        }
+    }
+    return null;
+}
+
+// ============================================
+// Helper: Cadastrar produto no VHSYS
+// ============================================
+function cadastrarProduto($baseUrl, $headers, $item) {
+    $desc = $item['nome'] ? mb_substr($item['nome'], 0, 255) : 'Produto Avulso';
+    $codigo = $item['codigo'] ?? '';
+    $valor = floatval($item['valor_peca'] ?? 0);
+
+    $payload = [
+        'id_categoria' => 0,
+        'cod_produto' => $codigo ?: '0',
+        'marca_produto' => '',
+        'desc_produto' => $desc,
+        'fornecedor_produto' => '',
+        'fornecedor_produto_id' => 0,
+        'minimo_produto' => '0.00',
+        'maximo_produto' => '0.00',
+        'estoque_produto' => '0.00',
+        'unidade_produto' => 'UN',
+        'valor_produto' => number_format($valor, 2, '.', ''),
+        'valor_custo_produto' => number_format($valor, 2, '.', ''),
+        'peso_produto' => '0.00',
+        'peso_liq_produto' => '0.00',
+        'icms_produto' => '0.00',
+        'ipi_produto' => '0.00',
+        'pis_produto' => '0.00',
+        'cofins_produto' => '0.00',
+        'cest_produto' => '',
+        'ncm_produto' => '',
+        'codigo_barra_produto' => '',
+        'obs_produto' => '',
+        'tipo_produto' => 'Produto',
+        'kit_produto' => 'Nao',
+        'status_produto' => 'Ativo',
+        'produto_variado' => false,
+    ];
+
+    $url = $baseUrl . '/produtos';
+    $response = makeRequest($url, $headers, 'POST', $payload);
+    $data = json_decode($response, true);
+
+    if (isset($data['code']) && $data['code'] == 200 && isset($data['data']['id_produto'])) {
+        return $data['data']['id_produto'];
+    }
+    return null;
+}
+
+// ============================================
+// Helper: Construir tipo de serviço a partir das flags do item
+// ============================================
+function buildTipoServico($item) {
+    $troca = filter_var($item['troca'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $ri = filter_var($item['remocao_instalacao'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $rep = filter_var($item['reparacao'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $pin = filter_var($item['pintura'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $nome = trim($item['nome'] ?? '');
+
+    $partes = [];
+
+    // Remoção/Instalação ou Troca
+    if ($troca || $ri) {
+        $partes[] = 'REM, INST';
+    }
+
+    // Reparação
+    if ($rep) {
+        $partes[] = 'REPARAÇÃO';
+    }
+
+    // Pintura
+    if ($pin) {
+        $partes[] = 'PINTURA';
+    }
+
+    if (empty($partes)) {
+        return $nome;
+    }
+
+    $tipo = implode(' E ', $partes);
+    return $nome ? ($tipo . ' ' . $nome) : $tipo;
+}
+
+// ============================================
 // Helper: Check admin role
 // ============================================
 function isAdmin($conn, $user_id) {
@@ -301,6 +402,9 @@ if ($action === 'parse_xml') {
             $tipo_peca = (string)($item->tipo_peca ?? '');
             $comentario = (string)($item->comentario ?? '');
             $troca = (string)($item->troca ?? 'false') === 'true';
+            $remocao_instalacao = (string)($item->remocao_instalacao ?? 'false') === 'true';
+            $reparacao = (string)($item->reparacao ?? 'false') === 'true';
+            $pintura = (string)($item->pintura ?? 'false') === 'true';
 
             // Calculate values
             $valor_peca = $preco_liquido > 0 ? $preco_liquido : $preco;
@@ -334,6 +438,9 @@ if ($action === 'parse_xml') {
                 'fornecimento' => $fornecimento,
                 'categoria' => $categoria,
                 'troca' => $troca,
+                'remocao_instalacao' => $remocao_instalacao,
+                'reparacao' => $reparacao,
+                'pintura' => $pintura,
                 'preco' => $preco,
                 'preco_liquido' => $preco_liquido,
                 'quantidade' => $quantidade,
@@ -443,6 +550,7 @@ if ($action === 'criar_os') {
         'equipamento_ordem' => $data['equipamento_ordem'] ?? '',
         'status_pedido' => 'Em Aberto',
         'data_pedido' => date('Y-m-d'),
+        'tipo_atendimento_ordem' => 'Interno',
     ];
 
     $url = $baseUrl . '/ordens-servico';
@@ -467,21 +575,31 @@ if ($action === 'criar_os') {
                 $valor_total_mdo = floatval($item['valor_mdo_total'] ?? 0);
                 $valor_unit = $horas_totais > 0 ? ($valor_total_mdo / $horas_totais) : $valor_total_mdo;
                 
+                // Build service name from type flags + description (Mudança 2)
+                $desc_servico = buildTipoServico($item);
+                $desc_servico = $desc_servico ? mb_substr($desc_servico, 0, 255) : 'Serviço Avulso';
+                
                 $servico_payload = [
                     'id_servico' => 0, // Sending 0 or omitting might allow avulso creation.
-                    'desc_servico' => $item['nome'] ? mb_substr($item['nome'], 0, 255) : 'Serviço Avulso',
+                    'desc_servico' => $desc_servico,
                     'horas_servico' => $horas_totais,
                     'valor_unit_servico' => round($valor_unit, 2),
                 ];
                 
                 $item_url = $baseUrl . '/ordens-servico/' . $vhsys_os_id . '/servicos';
                 makeRequest($item_url, $headers, 'POST', $servico_payload);
-            } else {
-                // Product (Oficina or Seguradora)
-                // Assuming the endpoint for products is /ordens-servico/{id}/produtos
+            } else if ($categoria === 'oficina') {
+                // Product - Apenas fornecimento Oficina
+                $desc_produto = $item['nome'] ? mb_substr($item['nome'], 0, 255) : 'Produto Avulso';
+                $id_produto = buscarProdutoPorDescricao($baseUrl, $headers, $desc_produto);
+                
+                if (!$id_produto) {
+                    $id_produto = cadastrarProduto($baseUrl, $headers, $item);
+                }
+                
                 $produto_payload = [
-                    'id_produto' => 0,
-                    'desc_produto' => $item['nome'] ? mb_substr($item['nome'], 0, 255) : 'Produto Avulso',
+                    'id_produto' => $id_produto ?: 0,
+                    'desc_produto' => $desc_produto,
                     'qtde_produto' => intval($item['quantidade'] ?? 1),
                     'valor_unit_produto' => floatval($item['valor_peca'] ?? 0),
                 ];
@@ -489,6 +607,7 @@ if ($action === 'criar_os') {
                 $item_url = $baseUrl . '/ordens-servico/' . $vhsys_os_id . '/produtos';
                 makeRequest($item_url, $headers, 'POST', $produto_payload);
             }
+            // Itens de seguradora são ignorados - não inseridos na OS
         }
     }
 

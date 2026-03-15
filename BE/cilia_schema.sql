@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS cilia_usuarios (
     nome_completo VARCHAR(255) DEFAULT '',
     email VARCHAR(255) DEFAULT '',
     empresa VARCHAR(255) DEFAULT '',
+    vhsys_access_token VARCHAR(255) NULL,
+    vhsys_secret_token VARCHAR(255) NULL,
     role ENUM('user', 'admin') DEFAULT 'user',
     ativo TINYINT(1) DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

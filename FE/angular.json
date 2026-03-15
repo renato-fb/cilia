@@ -7,7 +7,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "phm": {
+    "cilia": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -17,6 +17,7 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
+            "outputPath": "dist/cilia",
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "assets": [
@@ -53,7 +54,7 @@
                 }
               ],
               "outputHashing": "all",
-              "baseHref": "/apps/phm/"
+              "baseHref": "/apps/cilia/"
             },
             "development": {
               "optimization": false,
@@ -67,10 +68,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "phm:build:production"
+              "buildTarget": "cilia:build:production"
             },
             "development": {
-              "buildTarget": "phm:build:development"
+              "buildTarget": "cilia:build:development"
             }
           },
           "defaultConfiguration": "development"

@@ -15,6 +15,9 @@ interface ParsedItem {
   fornecimento: string;
   categoria: string;
   troca: boolean;
+  remocao_instalacao: boolean;
+  reparacao: boolean;
+  pintura: boolean;
   preco: number;
   preco_liquido: number;
   quantidade: number;
@@ -245,13 +248,15 @@ export class DashboardComponent {
     const data = this.parsedData();
     if (!data) return [];
 
+    // Sempre exclui itens de seguradora
+    const semSeguradora = data.itens.filter(item => item.categoria !== 'seguradora');
+
     if (this.importMode() === 'all') {
-      return data.itens;
+      return semSeguradora;
     }
 
-    return data.itens.filter(item => {
+    return semSeguradora.filter(item => {
       if (item.categoria === 'oficina' && this.importOficina()) return true;
-      if (item.categoria === 'seguradora' && this.importSeguradora()) return true;
       if (item.categoria === 'servico' && this.importServico()) return true;
       return false;
     });
@@ -259,7 +264,7 @@ export class DashboardComponent {
 
   get filteredTotal(): number {
     return this.filteredItems.reduce((sum, item) => {
-      if (item.categoria === 'oficina' || item.categoria === 'seguradora') {
+      if (item.categoria === 'oficina') {
         return sum + item.valor_peca;
       }
       return sum + item.valor_mdo_total;
