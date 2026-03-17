@@ -39,10 +39,13 @@ O projeto é dividido em duas partes principais (monorepo simples):
 2. **Parsing do XML (`api.php` > `$action === 'parse_xml'`):** 
    - A biblioteca `SimpleXMLElement` varre tags específicas do orçamento padrão do mercado (ex: placa, chassi, dados do cliente, tipo_item, preco_liquido, horas de pintura/reparo).
    - Horas de reparação são multiplicadas por valores fixos pré-configurados pela oficina para gerar o "Custo de Mão de Obra".
-3. **Criação da OS (`api.php` > `$action === 'importar_xml_vhsys'`):**
+3. **Criação da OS (`api.php` > `$action === 'criar_os'`):**
    - Cria o Cliente no VHSYS (se não existir).
-   - Cria a Ordem de Serviço base.
-   - Itera sobre as peças e serviços enviados pelo Frontend. Adiciona serviços na rota de `/ordens-servico/{id}/servicos` e peças na rota de produtos associados à OS.
+   - Cria a Ordem de Serviço base (com `tipo_atendimento_ordem: 'Interno'`).
+   - Itera sobre as peças e serviços enviados pelo Frontend. 
+     - **Serviços:** Adiciona na rota de `/ordens-servico/{id}/servicos` como avulsos (`id_servico=0`) com o nome concatenando as flags do XML (ex: `REPARAÇÃO E PINTURA CAPÔ`).
+     - **Peças (Oficina):** Busca o produto no VHSYS via `GET /produtos?desc_produto={descricao}`. Se não existir, pré-cadastra o produto via `POST /produtos` com os dados mínimos (impostos/peso zerados). Em seguida, associa o `id_produto` retornado à OS na rota `/ordens-servico/{id}/produtos`.
+     - **Peças (Seguradora):** São completamente **ignoradas** e não são inseridas na OS, pois representam fornecimento externo.
 
 ## 4. Ambiente e Deploy
 

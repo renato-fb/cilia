@@ -98,10 +98,18 @@ function buscarProdutoPorDescricao($baseUrl, $headers, $descricao) {
 // ============================================
 // Helper: Cadastrar produto no VHSYS
 // ============================================
-function cadastrarProduto($baseUrl, $headers, $item) {
-    $desc = $item['nome'] ? mb_substr($item['nome'], 0, 255) : 'Produto Avulso';
-    $codigo = $item['codigo'] ?? '';
-    $valor = floatval($item['valor_peca'] ?? 0);
+function cadastrarProduto($baseUrl, $headers, $item, $isServico = false, $customValor = null) {
+    if ($isServico) {
+        $desc = $item['nome'] ? mb_substr($item['nome'], 0, 255) : 'Serviço Avulso';
+        $codigo = $item['codigo'] ?? '';
+        $valor = $customValor !== null ? floatval($customValor) : floatval($item['valor_mdo_total'] ?? 0);
+        $tipo_produto = 'Servico';
+    } else {
+        $desc = $item['nome'] ? mb_substr($item['nome'], 0, 255) : 'Produto Avulso';
+        $codigo = $item['codigo'] ?? '';
+        $valor = floatval($item['valor_peca'] ?? 0);
+        $tipo_produto = 'Produto';
+    }
 
     $payload = [
         'id_categoria' => 0,
@@ -126,7 +134,7 @@ function cadastrarProduto($baseUrl, $headers, $item) {
         'ncm_produto' => '',
         'codigo_barra_produto' => '',
         'obs_produto' => '',
-        'tipo_produto' => 'Produto',
+        'tipo_produto' => $tipo_produto,
         'kit_produto' => 'Nao',
         'status_produto' => 'Ativo',
         'produto_variado' => false,
@@ -579,8 +587,18 @@ if ($action === 'criar_os') {
                 $desc_servico = buildTipoServico($item);
                 $desc_servico = $desc_servico ? mb_substr($desc_servico, 0, 255) : 'Serviço Avulso';
                 
+                // Pre-register service in VHSYS as a Product with tipo_produto = 'Servico'
+                $id_servico = buscarProdutoPorDescricao($baseUrl, $headers, $desc_servico);
+                
+                if (!$id_servico) {
+                    // Temporarily update item name to passed concatenated name for registration
+                    $tempItem = $item;
+                    $tempItem['nome'] = $desc_servico;
+                    $id_servico = cadastrarProduto($baseUrl, $headers, $tempItem, true, $valor_unit);
+                }
+                
                 $servico_payload = [
-                    'id_servico' => 0, // Sending 0 or omitting might allow avulso creation.
+                    'id_servico' => $id_servico ?: 0,
                     'desc_servico' => $desc_servico,
                     'horas_servico' => $horas_totais,
                     'valor_unit_servico' => round($valor_unit, 2),
