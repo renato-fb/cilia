@@ -121,7 +121,7 @@ export class AdminComponent {
     } else {
       // Create
       if (!this.formUsername() || !this.formPassword() || !this.formVhsysAccess() || !this.formVhsysSecret()) {
-        this.toast.error('Username, Senha e Credenciais VHSYS são obrigatórios.');
+        this.toast.error('Username, Senha e Credenciais Kllix são obrigatórios.');
         this.saving.set(false);
         return;
       }

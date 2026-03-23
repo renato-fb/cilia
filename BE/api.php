@@ -356,8 +356,18 @@ if ($action === 'parse_xml') {
     // Extract main data
     $seguradora = (string)($xml->seguradora->nome ?? '');
     $placa = (string)($xml->veiculo->placa ?? '');
-    $numero_orcamento = (string)($xml->numero_orcamento ?? '');
+    $numero_raw = (string)($xml->numero_orcamento ?? '');
     $numero_sinistro = (string)($xml->numero_sinistro ?? '');
+
+    // Extrair versão do orçamento (ex: "12345.2" → base "12345", versão 2)
+    if (preg_match('/^(.+?)\.(\d+)$/', $numero_raw, $m)) {
+        $numero_orcamento = $m[1];
+        $versao_orcamento = (int)$m[2];
+    } else {
+        $numero_orcamento = $numero_raw;
+        $versao_orcamento = 1;
+    }
+    $is_update = $versao_orcamento > 1;
 
     // Cliente data
     $cliente = [
@@ -387,13 +397,13 @@ if ($action === 'parse_xml') {
     ];
 
     // Mao de obra values
-    $valor_hora_mdo = floatval($xml->padrao_mao_de_obra->valor_hora_mao_de_obra ?? 0);
-    $valor_hora_rep = floatval($xml->padrao_mao_de_obra->valor_hora_reparacao ?? 0);
-    $valor_hora_pin = floatval($xml->padrao_mao_de_obra->valor_hora_pintura ?? 0);
+    $valor_hora_mdo = round(floatval((string)($xml->padrao_mao_de_obra->valor_hora_mao_de_obra ?? '0')), 2);
+    $valor_hora_rep = round(floatval((string)($xml->padrao_mao_de_obra->valor_hora_reparacao ?? '0')), 2);
+    $valor_hora_pin = round(floatval((string)($xml->padrao_mao_de_obra->valor_hora_pintura ?? '0')), 2);
 
     // Parse items
     $itens = [];
-    $totais = ['oficina' => 0, 'seguradora' => 0, 'servico' => 0];
+    $totais = ['oficina' => 0, 'seguradora' => 0, 'servico' => 0, 'mdo_ri' => 0, 'mdo_reparacao' => 0, 'mdo_pintura' => 0];
 
     if (isset($xml->itens_orcamento->item)) {
         foreach ($xml->itens_orcamento->item as $item) {
@@ -403,9 +413,9 @@ if ($action === 'parse_xml') {
             $preco = floatval($item->preco ?? 0);
             $preco_liquido = floatval($item->preco_liquido ?? 0);
             $quantidade = intval($item->quantidade ?? 1);
-            $hora_ri = floatval($item->hora_remocao_instalacao ?? 0);
-            $hora_rep = floatval($item->hora_reparacao ?? 0);
-            $hora_pin = floatval($item->hora_pintura ?? 0);
+            $hora_ri  = floatval((string)($item->hora_remocao_instalacao ?? '0'));
+            $hora_rep = floatval((string)($item->hora_reparacao ?? '0'));
+            $hora_pin = floatval((string)($item->hora_pintura ?? '0'));
             $tipo_item = (string)($item->tipo_item ?? '');
             $tipo_peca = (string)($item->tipo_peca ?? '');
             $comentario = (string)($item->comentario ?? '');
@@ -416,10 +426,10 @@ if ($action === 'parse_xml') {
 
             // Calculate values
             $valor_peca = $preco_liquido > 0 ? $preco_liquido : $preco;
-            $valor_mdo_ri = $hora_ri * $valor_hora_mdo;
-            $valor_mdo_rep = $hora_rep * $valor_hora_rep;
-            $valor_mdo_pin = $hora_pin * $valor_hora_pin;
-            $valor_mdo_total = $valor_mdo_ri + $valor_mdo_rep + $valor_mdo_pin;
+            $valor_mdo_ri  = round($hora_ri  * $valor_hora_mdo, 2);
+            $valor_mdo_rep = round($hora_rep * $valor_hora_rep, 2);
+            $valor_mdo_pin = round($hora_pin * $valor_hora_pin, 2);
+            $valor_mdo_total = round($valor_mdo_ri + $valor_mdo_rep + $valor_mdo_pin, 2);
 
             if (strtolower($tipo_item) === 'serviço' || (empty($fornecimento) && empty($tipo_item)) || ($valor_peca == 0 && $valor_mdo_total > 0)) {
                 $categoria = 'servico';
@@ -466,11 +476,15 @@ if ($action === 'parse_xml') {
 
             // Accumulate totals
             if ($categoria === 'oficina') {
-                $totais['oficina'] += $valor_peca;
+                $totais['oficina'] = round($totais['oficina'] + $valor_peca, 2);
             } elseif ($categoria === 'seguradora') {
-                $totais['seguradora'] += $valor_peca;
+                $totais['seguradora'] = round($totais['seguradora'] + $valor_peca, 2);
             }
-            $totais['servico'] += $valor_mdo_total;
+            // Soma TODA mão de obra (incluindo labor de itens seguradora) — total real cobrado pela oficina
+            $totais['servico']       = round($totais['servico']       + $valor_mdo_total, 2);
+            $totais['mdo_ri']        = round($totais['mdo_ri']        + $valor_mdo_ri,    2);
+            $totais['mdo_reparacao'] = round($totais['mdo_reparacao'] + $valor_mdo_rep,   2);
+            $totais['mdo_pintura']   = round($totais['mdo_pintura']   + $valor_mdo_pin,   2);
         }
     }
 
@@ -487,6 +501,8 @@ if ($action === 'parse_xml') {
         'status' => 'success',
         'seguradora' => $seguradora,
         'numero_orcamento' => $numero_orcamento,
+        'versao_orcamento' => $versao_orcamento,
+        'is_update' => $is_update,
         'numero_sinistro' => $numero_sinistro,
         'cliente' => $cliente,
         'veiculo' => $veiculo,
@@ -548,7 +564,10 @@ if ($action === 'criar_os') {
     $user_id = $data['user_id'] ?? null;
     $headers = getVhsysHeaders($conn, $user_id, $config);
 
-    // Build VHSYS payload
+    $os_existente_id = $data['os_existente_id'] ?? null;
+    $is_update = !empty($os_existente_id);
+
+    // Build payload base
     $payload = [
         'id_cliente' => $data['id_cliente'] ?? null,
         'nome_cliente' => $data['nome_cliente'] ?? '',
@@ -556,18 +575,46 @@ if ($action === 'criar_os') {
         'obs_pedido' => $data['obs_pedido'] ?? '',
         'obs_interno_pedido' => $data['obs_interno_pedido'] ?? '',
         'equipamento_ordem' => $data['equipamento_ordem'] ?? '',
-        'status_pedido' => 'Em Aberto',
-        'data_pedido' => date('Y-m-d'),
-        'tipo_atendimento_ordem' => 'Interno',
     ];
 
-    $url = $baseUrl . '/ordens-servico';
-    $response = makeRequest($url, $headers, 'POST', $payload);
-    $responseData = json_decode($response, true);
+    if ($is_update) {
+        // Atualizar OS existente
+        // 1. Limpar itens antigos (produtos)
+        $prod_list_resp = makeRequest($baseUrl . '/ordens-servico/' . $os_existente_id . '/produtos', $headers, 'GET');
+        $prod_list = json_decode($prod_list_resp, true);
+        if (!empty($prod_list['data'])) {
+            foreach ($prod_list['data'] as $p) {
+                makeRequest($baseUrl . '/ordens-servico/' . $os_existente_id . '/produtos/' . $p['id_ped_produto'], $headers, 'DELETE');
+            }
+        }
+        // 2. Limpar itens antigos (serviços)
+        $serv_list_resp = makeRequest($baseUrl . '/ordens-servico/' . $os_existente_id . '/servicos', $headers, 'GET');
+        $serv_list = json_decode($serv_list_resp, true);
+        if (!empty($serv_list['data'])) {
+            foreach ($serv_list['data'] as $s) {
+                makeRequest($baseUrl . '/ordens-servico/' . $os_existente_id . '/servicos/' . $s['id_ped_servico'], $headers, 'DELETE');
+            }
+        }
+        // 3. Atualizar dados da OS
+        $url = $baseUrl . '/ordens-servico/' . $os_existente_id;
+        $response = makeRequest($url, $headers, 'PUT', $payload);
+        $responseData = json_decode($response, true);
+        $vhsys_os_id = $os_existente_id;
+        $status = ($responseData['code'] ?? 0) == 200 ? 'sucesso' : 'erro';
+        $erro_msg = $status === 'erro' ? ($responseData['data'] ?? 'Erro desconhecido') : null;
+    } else {
+        // Criar nova OS
+        $payload['status_pedido'] = 'Em Aberto';
+        $payload['data_pedido'] = date('Y-m-d');
+        $payload['tipo_atendimento_ordem'] = 'Interno';
 
-    $vhsys_os_id = $responseData['data']['id_ordem'] ?? null;
-    $status = ($responseData['code'] ?? 0) == 200 ? 'sucesso' : 'erro';
-    $erro_msg = $status === 'erro' ? ($responseData['data'] ?? 'Erro desconhecido') : null;
+        $url = $baseUrl . '/ordens-servico';
+        $response = makeRequest($url, $headers, 'POST', $payload);
+        $responseData = json_decode($response, true);
+        $vhsys_os_id = $responseData['data']['id_ordem'] ?? null;
+        $status = ($responseData['code'] ?? 0) == 200 ? 'sucesso' : 'erro';
+        $erro_msg = $status === 'erro' ? ($responseData['data'] ?? 'Erro desconhecido') : null;
+    }
 
     // Insert Items into the VHSYS OS
     if ($vhsys_os_id && $status === 'sucesso' && !empty($data['itens'])) {
@@ -582,6 +629,13 @@ if ($action === 'criar_os') {
                 // We calculate an implied unit rate from the total MDO value, or fallback to the provided values
                 $valor_total_mdo = floatval($item['valor_mdo_total'] ?? 0);
                 $valor_unit = $horas_totais > 0 ? ($valor_total_mdo / $horas_totais) : $valor_total_mdo;
+                // Compensar arredondamento: ajustar valor_unit para que horas * valor_unit == valor_total_mdo
+                $valor_unit_r = round($valor_unit, 2);
+                if ($horas_totais > 0 && round($valor_unit_r * $horas_totais, 2) !== round($valor_total_mdo, 2)) {
+                    $diff = round($valor_total_mdo, 2) - round($valor_unit_r * $horas_totais, 2);
+                    $valor_unit_r = round($valor_unit_r + ($diff / $horas_totais), 2);
+                }
+                $valor_unit = $valor_unit_r;
                 
                 // Build service name from type flags + description (Mudança 2)
                 $desc_servico = buildTipoServico($item);
@@ -644,7 +698,7 @@ if ($action === 'criar_os') {
                 ':tipos' => $data['tipos_importados'] ?? '',
                 ':total_itens' => $data['total_itens'] ?? 0,
                 ':valor_total' => $data['valor_total'] ?? 0,
-                ':status' => $status,
+                ':status' => $is_update ? ($status === 'sucesso' ? 'atualizado' : $status) : $status,
                 ':erro' => is_string($erro_msg) ? $erro_msg : json_encode($erro_msg),
             ]);
         } catch (Exception $e) {
@@ -653,6 +707,42 @@ if ($action === 'criar_os') {
     }
 
     echo $response;
+    exit;
+}
+
+// ============================================
+// ACTION: Buscar OS por Número de Orçamento
+// ============================================
+if ($action === 'buscar_os_por_orcamento') {
+    $numero = $_GET['numero_orcamento'] ?? '';
+    $user_id = $_GET['user_id'] ?? null;
+
+    if (!$numero || !$user_id) {
+        echo json_encode(['status' => 'success', 'os_existente' => null]);
+        exit;
+    }
+
+    $headers = getVhsysHeaders($conn, $user_id, $config);
+
+    // Paginar pela API buscando OS cuja referencia_ordem contenha o número base
+    $found = null;
+    $offset = 0;
+    do {
+        $url = $baseUrl . '/ordens-servico?limit=250&offset=' . $offset;
+        $response = makeRequest($url, $headers, 'GET');
+        $data = json_decode($response, true);
+        $items = $data['data'] ?? [];
+
+        foreach ($items as $os) {
+            if (strpos($os['referencia_ordem'] ?? '', $numero) !== false) {
+                $found = $os;
+                break 2;
+            }
+        }
+        $offset += 250;
+    } while (count($items) === 250);
+
+    echo json_encode(['status' => 'success', 'os_existente' => $found]);
     exit;
 }
 

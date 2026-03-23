@@ -34,12 +34,14 @@ interface ParsedItem {
 interface ParsedData {
   seguradora: string;
   numero_orcamento: string;
+  versao_orcamento: number;
+  is_update: boolean;
   numero_sinistro: string;
   cliente: any;
   veiculo: any;
   padrao_mao_de_obra: any;
   itens: ParsedItem[];
-  totais: { oficina: number; seguradora: number; servico: number };
+  totais: { oficina: number; seguradora: number; servico: number; mdo_ri: number; mdo_reparacao: number; mdo_pintura: number };
   resumo_xml: any;
 }
 
@@ -85,6 +87,10 @@ export class DashboardComponent {
   vhsysStatus = signal<'checking' | 'active' | 'error' | 'missing'>('checking');
   vhsysErrorMessage = signal<string | null>(null);
 
+  // OS existente (para atualização)
+  osExistente = signal<any>(null);
+  searchingOs = signal(false);
+
   // OS creation
   creatingOs = signal(false);
 
@@ -109,12 +115,12 @@ export class DashboardComponent {
         } else {
           // If 401/403 or logic error returned
           this.vhsysStatus.set('error');
-          this.vhsysErrorMessage.set(res.details?.message || 'Credenciais inválidas ou conta bloqueada no VHSYS.');
+          this.vhsysErrorMessage.set(res.details?.message || 'Credenciais inválidas ou conta bloqueada no Kllix.');
         }
       },
       error: (err) => {
         this.vhsysStatus.set('error');
-        this.vhsysErrorMessage.set('Não foi possível conectar à API do VHSYS.');
+        this.vhsysErrorMessage.set('Não foi possível conectar à API do Kllix.');
       }
     });
   }
@@ -142,6 +148,8 @@ export class DashboardComponent {
     this.importOficina.set(true);
     this.importSeguradora.set(true);
     this.importServico.set(true);
+    this.osExistente.set(null);
+    this.searchingOs.set(false);
   }
 
   closeModal() {
@@ -191,6 +199,9 @@ export class DashboardComponent {
         if (response.status === 'success') {
           this.parsedData.set(response);
           this.searchClient(response.seguradora);
+          if (response.is_update) {
+            this.buscarOSExistente(response.numero_orcamento);
+          }
           this.modalStep.set(2);
           this.toast.success('XML processado com sucesso!');
         } else {
@@ -202,6 +213,22 @@ export class DashboardComponent {
         this.toast.error('Erro ao enviar XML ao servidor.');
         this.uploading.set(false);
       }
+    });
+  }
+
+  buscarOSExistente(numero: string) {
+    const userId = this.authService.getUserId();
+    if (!userId) return;
+
+    this.searchingOs.set(true);
+    this.osExistente.set(null);
+
+    this.apiService.buscarOSPorOrcamento(userId, numero).subscribe({
+      next: (res) => {
+        this.osExistente.set(res.os_existente || null);
+        this.searchingOs.set(false);
+      },
+      error: () => this.searchingOs.set(false)
     });
   }
 
@@ -263,12 +290,15 @@ export class DashboardComponent {
   }
 
   get filteredTotal(): number {
-    return this.filteredItems.reduce((sum, item) => {
-      if (item.categoria === 'oficina') {
-        return sum + item.valor_peca;
-      }
-      return sum + item.valor_mdo_total;
-    }, 0);
+    const data = this.parsedData();
+    if (!data) return 0;
+    if (this.importMode() === 'all') {
+      return Math.round((data.totais.oficina + data.totais.servico) * 100) / 100;
+    }
+    let total = 0;
+    if (this.importOficina()) total += data.totais.oficina;
+    if (this.importServico()) total += data.totais.servico;
+    return Math.round(total * 100) / 100;
   }
 
   getItemsByCategory(category: string): ParsedItem[] {
@@ -328,7 +358,7 @@ export class DashboardComponent {
     const payload = {
       id_cliente: this.vhsysClientId(),
       nome_cliente: data.seguradora,
-      referencia_ordem: `${data.seguradora} + ${data.veiculo.placa}`,
+      referencia_ordem: `${data.seguradora} + ${data.veiculo.placa} - Orç ${data.numero_orcamento}`,
       obs_pedido: obsPedido,
       obs_interno_pedido: obsInterno,
       equipamento_ordem: `${data.veiculo.nome} - ${data.veiculo.marca} ${data.veiculo.modelo} - Placa: ${data.veiculo.placa}`,
@@ -340,17 +370,19 @@ export class DashboardComponent {
       total_itens: items.length,
       valor_total: this.filteredTotal,
       itens: items,
+      os_existente_id: this.osExistente()?.id_ordem || null,
     };
 
     this.apiService.createOS(payload).subscribe({
       next: (res) => {
         const responseData = typeof res === 'string' ? JSON.parse(res) : res;
         if (responseData.code === 200 || responseData.status === 'success') {
-          this.toast.success('Ordem de Serviço criada com sucesso!');
+          const msg = this.osExistente() ? 'Ordem de Serviço atualizada com sucesso!' : 'Ordem de Serviço criada com sucesso!';
+          this.toast.success(msg);
           this.closeModal();
           this.loadHistory();
         } else {
-          this.toast.error(responseData.data || 'Erro ao criar OS no VHSYS.');
+          this.toast.error(responseData.data || 'Erro ao criar OS no Kllix.');
         }
         this.creatingOs.set(false);
       },
@@ -365,6 +397,7 @@ export class DashboardComponent {
   getStatusClass(status: string): string {
     switch (status) {
       case 'sucesso': return 'bg-green-100 text-green-800';
+      case 'atualizado': return 'bg-blue-100 text-blue-800';
       case 'erro': return 'bg-red-100 text-red-800';
       default: return 'bg-yellow-100 text-yellow-800';
     }

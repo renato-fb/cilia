@@ -54,11 +54,11 @@ import { ToastService } from '../../services/toast.service';
           </div>
         </div>
 
-        <!-- VHSYS Integration -->
+        <!-- Kllix Integration -->
         <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
           <h2 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
             <lucide-icon name="key" class="w-5 h-5"></lucide-icon>
-            Integração VHSYS
+            Integração Kllix
           </h2>
           <div class="space-y-4 max-w-md">
             <div>

@@ -43,6 +43,11 @@ export class ApiService {
     return this.http.get<any>(`${this.apiUrl}?action=verificar_vhsys&user_id=${userId}`);
   }
 
+  // ---- Search OS by Budget Number ----
+  buscarOSPorOrcamento(userId: number, numero: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}?action=buscar_os_por_orcamento&user_id=${userId}&numero_orcamento=${encodeURIComponent(numero)}`);
+  }
+
   // ---- Import History ----
   getHistory(userId: number): Observable<any[]> {
     return this.http.get<any[]>(`${this.apiUrl}?action=historico&user_id=${userId}`);
